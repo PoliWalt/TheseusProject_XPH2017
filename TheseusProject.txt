@@ -55,7 +55,7 @@ door_node = ["b","c","d","e","i","g","h","l","m","n","o","p","r"]
 freccia_or = {"ab":"down","ba":"up","bc":"down","cb":"up","dc":"up","cd":"down","de":"down","ed":"up","ef":"down","fe":"up","fg":"right","gf":"left","gh":"right","hg":"left","hi":"right","ih":"left","il":"up","li":"down","lm":"up","ml":"down","mn":"up","nm":"down","io":"right","oi":"left","op":"right","po":"left","pq":"up","qp":"down","qr":"up","rq":"down"}
 orientation_value = {"up":90,"down":270,"left":180,"right":0}
 
-coordinate_freccie = {
+coordinate_frecce = {
     "a":(147,27),
     "c":(68,203),
     "b":(71,120),
@@ -138,23 +138,23 @@ def attivaLed(led_on):
     
     
     med = Image.open("mappa.png")
-    med.save("caverio.png")
+    med.save("mappa_2.png")
     
     mappa = Image.open("mappa.png")
     for ele in led_on:
         freccia = Image.open("freccia.png")
         freccia = freccia.rotate(orientation_value[freccia_or[ele]], expand=1 )
-        mappa.paste(freccia,coordinate_freccie[ele[0]], freccia)
+        mappa.paste(freccia,coordinate_frecce[ele[0]], freccia)
 
     #mappa.show()
-    mappa.save("caverio.png")
+    mappa.save("mappa_2.png")
 
     # Load an color image in grayscale
-    #img = cv2.imread('caverio.png',cv2.IMREAD_COLOR)
+    #img = cv2.imread('mappa_2.png',cv2.IMREAD_COLOR)
     #cv2.imshow(img)
     
 """
-    img = cv2.imread('caverio.png')
+    img = cv2.imread('mappa_2.png')
     img = cv2.cvtColor(img, cv2.cv.CV_BGR2RGB)
     plt.imshow(img)"""
 
