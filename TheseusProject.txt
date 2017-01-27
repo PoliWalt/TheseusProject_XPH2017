@@ -1,0 +1,229 @@
+import time
+from pynq import Overlay
+Overlay("base.bit").download()
+
+
+from pynq.iop import Pmod_TMP2
+from pynq.iop import PMODB
+
+from pynq.iop import Arduino_Analog
+from pynq.iop import ARDUINO
+from pynq.iop import ARDUINO_GROVE_A1 #CO2
+
+
+
+
+import sys
+#import time
+import socket
+#import threading
+import traceback
+import pickle
+from PIL import Image
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from IPython import display
+
+
+
+analog = Arduino_Analog(ARDUINO,ARDUINO_GROVE_A1)
+TheseusFire=False
+TheseusSmoke=False
+THESEUS=False
+
+VRef=3.3
+O2analog_read=0
+j=0
+
+ThresholdFire=29 #Soglia 55°C
+ThresholdO2=15 #15%
+ThresholdCO2=1 #1%
+
+misVout1 = 0 #CO2
+misVout2 = 0 #02
+
+
+
+
+
+graph = {'l': {'i': 1, 'm': 1}, 'e': {'d': 1, 'f': 1}, 'h': {'i': 1, 'g': 1}, 'p': {'o': 1, 'q': 1}, 'd': {'c': 1, 'e': 1}, 'n': {'m': 1}, 'm': {'n': 1, 'l': 1}, 'g': {'h': 1, 'f': 1}, 'a': {'b': 1}, 'c': {'d': 1, 'b': 1}, 'b': {'c': 1, 'a': 1}, 'f': {'e': 1, 'g': 1}, 'i': {'o': 1, 'l': 1, 'h': 1}, 'r': {'q': 1}, 'o': {'i': 1, 'p': 1}, 'q': {'r': 1, 'p': 1}}
+
+
+exit_node = ["a","f","n","q"]
+door_node = ["b","c","d","e","i","g","h","l","m","n","o","p","r"]
+freccia_or = {"ab":"down","ba":"up","bc":"down","cb":"up","dc":"up","cd":"down","de":"down","ed":"up","ef":"down","fe":"up","fg":"right","gf":"left","gh":"right","hg":"left","hi":"right","ih":"left","il":"up","li":"down","lm":"up","ml":"down","mn":"up","nm":"down","io":"right","oi":"left","op":"right","po":"left","pq":"up","qp":"down","qr":"up","rq":"down"}
+orientation_value = {"up":90,"down":270,"left":180,"right":0}
+
+coordinate_freccie = {
+    "a":(147,27),
+    "c":(68,203),
+    "b":(71,120),
+    "e":(68,383),
+    "d":(68,275),
+    "g":(155,453),
+    "f":(45,492),
+    "i":(357,429),
+    "h":(239,453),
+    "m":(356,192),
+    "l":(353,330),
+    "o":(474,429),
+    "n":(356,104),
+    "q":(595,310),
+    "p":(575,450),
+    "r":(623,198)}
+
+
+def shortestpath(graph,start,end,visited=[],distances={},predecessors={}):
+	"""Find the shortest path between start and end nodes in a graph"""
+    # we've found our end node, now find the path to it, and return
+	if start==end:
+		path=[]
+		while end != None:
+			path.append(end)
+			end=predecessors.get(end,None)
+		return distances[start], path[::-1]
+	# detect if it's the first time through, set current distance to zero
+	if not visited: distances[start]=0
+	# process neighbors as per algorithm, keep track of predecessors
+	for neighbor in graph[start]:
+		if neighbor not in visited:
+			neighbordist = distances.get(neighbor,sys.maxsize)
+			tentativedist = distances[start] + graph[start][neighbor]
+			if tentativedist < neighbordist:
+				distances[neighbor] = tentativedist
+				predecessors[neighbor]=start
+	# neighbors processed, now mark the current node as visited
+	visited.append(start)
+	# finds the closest unvisited node to the start
+	unvisiteds = dict((k, distances.get(k,sys.maxsize)) for k in graph if k not in visited)
+	#print(unvisiteds)
+	closestnode = min(unvisiteds, key=unvisiteds.get)
+	# now we can take the closest node and recurse, making it current
+	return shortestpath(graph,closestnode,end,visited,distances,predecessors)
+
+def allarmTrigger(sensorCode):
+
+	try:
+		led_on = {}
+		print("Sensore attivato: "+sensorCode)
+		graph[sensorCode[0]][sensorCode[1]]=1000
+		graph[sensorCode[1]][sensorCode[0]]=1000
+		print(graph)
+
+		for node in door_node:
+
+			if node not in exit_node:
+				min_path = [10000]
+
+				for exit in exit_node:
+					path = shortestpath(graph,str(node),str(exit),[],{},{})
+					if path[0] < min_path[0]:
+						min_path = path
+				genLed(min_path[1],led_on)
+		print(led_on)
+		attivaLed(led_on)
+	except Exception:
+		print(traceback.format_exc())
+			
+def genLed(path,led_on):
+	for i in range(0,len(path)-1):
+		led_on[path[i]+path[i+1]] = 1
+
+def attivaLed(led_on):
+    up = 90
+    left = 180
+    down = 270
+    right = 0
+    
+    
+    med = Image.open("mappa.png")
+    med.save("caverio.png")
+    
+    mappa = Image.open("mappa.png")
+    for ele in led_on:
+        freccia = Image.open("freccia.png")
+        freccia = freccia.rotate(orientation_value[freccia_or[ele]], expand=1 )
+        mappa.paste(freccia,coordinate_freccie[ele[0]], freccia)
+
+    #mappa.show()
+    mappa.save("caverio.png")
+
+    # Load an color image in grayscale
+    #img = cv2.imread('caverio.png',cv2.IMREAD_COLOR)
+    #cv2.imshow(img)
+    
+"""
+    img = cv2.imread('caverio.png')
+    img = cv2.cvtColor(img, cv2.cv.CV_BGR2RGB)
+    plt.imshow(img)"""
+
+def fire():
+    if(Temp()>=ThresholdFire):
+        TheseusFire=True
+    else:
+        TheseusFire=False
+
+    return(TheseusFire)
+
+def smoke(misVout1, misVout2):
+    boolo2 = O2(misVout2)
+    boolco2 = CO2(misVout1)
+    if((boolo2<=ThresholdO2) or (boolco2>=ThresholdCO2)):
+        TheseusSmoke=True
+    else:
+        TheseusSmoke=False
+
+    return(TheseusSmoke)
+
+def readvout():
+    sum1=0
+    sum2=0
+    for i in range (32):
+        sum1=sum1+analog.read_raw()[0]#CO2
+        sum2=sum2+analog.read_raw()[1]#O2
+    sum1>>=5#CO2
+    sum2>>=5#O2
+    misVout1=sum1*(VRef/65535.0)#CO2
+    misVout2=sum2*(VRef/65535.0)#02
+    return (misVout1, misVout2)
+
+def O2(misVout2):
+    concPercO2=(misVout2*0.25/3.3)*100
+    print("O2= "+str(concPercO2)+"%")
+    return concPercO2
+
+def CO2(misVout1):
+    concPercCO2=(misVout1/3.3)*100
+    print("CO2= "+str(concPercCO2)+"%")
+    return concPercCO2
+    
+def Temp():
+    mytmp = Pmod_TMP2(PMODB)
+    temperature = mytmp.read()
+    print("Temp= "+str(temperature)+"°C")
+    return(temperature)
+
+def Algo():
+    (misVout1, misVout2) = readvout()
+    f = fire()
+    s = smoke(misVout1, misVout2)
+    if(f or s):
+        THESEUS=True
+    else:
+        THESEUS=False
+        
+    if f:
+        allarmTrigger("de") #origine incendio
+
+    if s:
+        allarmTrigger("ab") #origine incendio
+        
+    print("THESEUS: "+str(THESEUS))
+    return(THESEUS)
+
+mappainiziale = Image.open("mappa.png")
+mappainiziale.save("mappa_2.png")
+while(True):
+    Algo()
+    time.sleep(2)
